@@ -258,6 +258,15 @@ def test_part34(model_init_fn, optimizer_init_fn, num_epochs=1):
                     check_accuracy(sess, test_dset, x, scores, is_training=0)
                     print()
                 t += 1
+        num_correct, num_samples = 0, 0
+        for x_batch, y_batch in test_dset:
+            feed_dict = {x: x_batch, is_training: 0}
+            scores_np = sess.run(scores, feed_dict=feed_dict)
+            y_pred = scores_np.argmax(axis=1)
+            num_samples += x_batch.shape[0]
+            num_correct += (y_pred == y_batch).sum()
+        acc = float(num_correct) / num_samples
+        print('Got %d / %d correct (%.2f%%)' % (num_correct, num_samples, 100 * acc))
 
 def model_init_fn(inputs, is_training):
     model = None
@@ -266,31 +275,45 @@ def model_init_fn(inputs, is_training):
     ############################################################################
     input_shape = (32, 32, 3)
     initializer = tf.variance_scaling_initializer(scale=2.0)
-    conv1 = tf.layers.conv2d(inputs, 128, 3, 1, kernel_initializer= initializer)
+
+    conv1 = tf.layers.conv2d(inputs, 64, 3, 1, padding ='same', kernel_initializer=initializer)
+    conv1 = tf.layers.conv2d(conv1, 64, 3, 1, padding ='same', kernel_initializer= initializer)
+    conv1 = tf.layers.max_pooling2d(conv1, 2, 2)
     ba1 = tf.layers.batch_normalization(conv1, training = is_training)
     ba1 = tf.nn.relu(ba1)
-    conv2 = tf.layers.conv2d(ba1, 256, 3, kernel_initializer= initializer)
-    ba2 = tf.layers.batch_normalization(conv2, training = is_training)
-    ba2 = tf.nn.relu(ba2)
-    pool1 = tf.layers.max_pooling2d(ba2, 2, 2)
 
-    conv3 = tf.layers.conv2d(pool1, 512, 3, kernel_initializer= initializer)
+    conv2 = tf.layers.conv2d(ba1, 128, 3, padding ='same', kernel_initializer=initializer)
+    conv2 = tf.layers.conv2d(conv2, 128, 3, padding = 'same', kernel_initializer=initializer)
+    conv2 = tf.layers.conv2d(conv2, 128, 3, padding ='same', kernel_initializer= initializer)
+    pool1 = tf.layers.max_pooling2d(conv2, 2, 2, padding = 'same')
+    ba2 = tf.layers.batch_normalization(pool1, training = is_training)
+    ba2 = tf.nn.relu(ba2)
+
+
+    conv3 = tf.layers.conv2d(ba2, 256, 3, padding ='same', kernel_initializer=initializer)
+    conv3 = tf.layers.conv2d(conv3, 256, 3, padding = 'same', kernel_initializer=initializer)
+    conv3 = tf.layers.conv2d(conv3, 256, 3, padding ='same', kernel_initializer= initializer)
+    conv3 = tf.layers.max_pooling2d(conv3, 2, 2)
     ba3 = tf.layers.batch_normalization(conv3, training= is_training)
     ba3 = tf.nn.relu(ba3)
-    conv4 = tf.layers.conv2d(ba3, 256, 3, kernel_initializer= initializer)
+
+    conv4 = tf.layers.conv2d(ba3, 512, 3, padding = 'same', kernel_initializer=initializer)
+    conv4 = tf.layers.conv2d(conv4, 512, 3, padding ='same', kernel_initializer=initializer)
+    conv4 = tf.layers.conv2d(conv4, 512, 3,  padding ='same', kernel_initializer= initializer)
+    #pool2 = tf.layers.max_pooling2d(conv4, 2, 2)
     ba4 = tf.layers.batch_normalization(conv4, training = is_training)
     ba4 = tf.nn.relu(ba4)
-    pool2 = tf.layers.max_pooling2d(ba4, 2, 2)
 
-    pool2_flat = tf.reshape(pool2, [-1, 5*5*256])
-    dense1 = tf.layers.dense(pool2_flat, units = 512, activation = tf.nn.relu)
-    ba5 = tf.layers.batch_normalization(dense1, center = False, scale = False, training = is_training)
-    #dropout1 = tf.layers.dropout(ba5, training = is_training)
-    dense2 = tf.layers.dense(ba5, units = 128, activation = tf.nn.relu)
-    ba6 = tf.layers.batch_normalization(dense2, center = False, scale = False, training = is_training)
-    #dropout2 = tf.layers.dropout(ba6, training = is_training)
 
-    net = tf.layers.dense(ba6, units = 10)
+    pool2_flat = tf.reshape(ba4, [-1, 4*4*512])
+    dense1 = tf.layers.dense(pool2_flat, units = 1024, activation = tf.nn.relu)
+    #ba5 = tf.layers.batch_normalization(dense1, center = False, scale = False, training = is_training)
+    dropout1 = tf.layers.dropout(dense1, training = is_training)
+    dense2 = tf.layers.dense(dropout1, units = 1024, activation = tf.nn.relu)
+    #ba6 = tf.layers.batch_normalization(dense2, center = False, scale = False, training = is_training)
+    dropout2 = tf.layers.dropout(dense2, training = is_training)
+
+    net = tf.layers.dense(dropout2, units = 10)
     ############################################################################
     #                            END OF YOUR CODE                              #
     ############################################################################
@@ -307,7 +330,8 @@ def optimizer_init_fn():
     ############################################################################
     #learning_rate = tf.train.exponential_decay(starter_learning_rate, global_step,
     #                                           100000, 0.96, staircase=True)
-    optimizer = tf.train.RMSPropOptimizer(1e-3, decay = 0.9, momentum=0.1)
+    #optimizer = tf.train.RMSPropOptimizer(1e-3, decay = 0.9, momentum=0.1)
+    optimizer = tf.train.AdamOptimizer()
     #optimizer = tf.train.MomentumOptimizer(learning_rate, momentum=0.9)
     ############################################################################
     #                            END OF YOUR CODE                              #
@@ -319,6 +343,6 @@ def resnet_init_fn(inputs, is_training):
     return net
 #device = '/cpu:0'
 print_every = 300
-num_epochs = 50
+num_epochs = 100
 train_part34(model_init_fn, optimizer_init_fn, num_epochs)
 #train_part34(resnet_init_fn,optimizer_init_fn, num_epochs)
