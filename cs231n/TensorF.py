@@ -276,7 +276,13 @@ def model_init_fn(inputs, is_training):
     input_shape = (32, 32, 3)
     initializer = tf.variance_scaling_initializer(scale=2.0)
 
-    conv1 = tf.layers.conv2d(inputs, 64, 3, 1, padding ='same', kernel_initializer=initializer)
+    conv1 = tf.layers.conv2d(inputs, 32, 3, 1, padding='same', kernel_initializer=initializer)
+    conv1 = tf.layers.conv2d(conv1, 32, 3, 1, padding='same', kernel_initializer=initializer)
+    conv1 = tf.layers.max_pooling2d(conv1, 2, 2)
+    ba1 = tf.layers.batch_normalization(conv1, training=is_training)
+    ba1 = tf.nn.relu(ba1)
+
+    conv1 = tf.layers.conv2d(ba1, 64, 3, 1, padding ='same', kernel_initializer=initializer)
     conv1 = tf.layers.conv2d(conv1, 64, 3, 1, padding ='same', kernel_initializer= initializer)
     conv1 = tf.layers.max_pooling2d(conv1, 2, 2)
     ba1 = tf.layers.batch_normalization(conv1, training = is_training)
@@ -293,7 +299,7 @@ def model_init_fn(inputs, is_training):
     conv3 = tf.layers.conv2d(ba2, 256, 3, padding ='same', kernel_initializer=initializer)
     conv3 = tf.layers.conv2d(conv3, 256, 3, padding = 'same', kernel_initializer=initializer)
     conv3 = tf.layers.conv2d(conv3, 256, 3, padding ='same', kernel_initializer= initializer)
-    conv3 = tf.layers.max_pooling2d(conv3, 2, 2)
+    #conv3 = tf.layers.max_pooling2d(conv3, 2, 2)
     ba3 = tf.layers.batch_normalization(conv3, training= is_training)
     ba3 = tf.nn.relu(ba3)
 
@@ -308,7 +314,7 @@ def model_init_fn(inputs, is_training):
     pool2_flat = tf.reshape(ba4, [-1, 4*4*512])
     dense1 = tf.layers.dense(pool2_flat, units = 1024, activation = tf.nn.relu)
     #ba5 = tf.layers.batch_normalization(dense1, center = False, scale = False, training = is_training)
-    dropout1 = tf.layers.dropout(dense1, training = is_training)
+    dropout1 = tf.layers.dropout(dense1, rate = 0.25, training = is_training)
     dense2 = tf.layers.dense(dropout1, units = 1024, activation = tf.nn.relu)
     #ba6 = tf.layers.batch_normalization(dense2, center = False, scale = False, training = is_training)
     dropout2 = tf.layers.dropout(dense2, training = is_training)
