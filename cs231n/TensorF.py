@@ -4,7 +4,9 @@ import numpy as np
 import math
 import timeit
 import matplotlib.pyplot as plt
-from ResNet import resnet_110
+import ResNet50
+from keras_preprocessing.image import ImageDataGenerator, array_to_img, img_to_array, load_img
+
 
 def load_cifar10(num_training=49000, num_validation=1000, num_test=10000):
     """
@@ -37,6 +39,7 @@ def load_cifar10(num_training=49000, num_validation=1000, num_test=10000):
     X_train = (X_train - mean_pixel) / std_pixel
     X_val = (X_val - mean_pixel) / std_pixel
     X_test = (X_test - mean_pixel) / std_pixel
+
 
     return X_train, y_train, X_val, y_val, X_test, y_test
 
@@ -75,7 +78,18 @@ class Dataset(object):
         return iter((self.X[i:i + B], self.y[i:i + B]) for i in range(0, N, B))
 
 
-train_dset = Dataset(X_train, y_train, batch_size=64, shuffle=True)
+datagen = ImageDataGenerator(
+        rotation_range = 0.2,
+        width_shift_range=0.2,
+        height_shift_range=0.2,
+        shear_range=0.2,
+        zoom_range=0.2,
+        horizontal_flip=True,
+        fill_mode='nearest'
+    )
+datagen.fit(X_train)
+#train_dset = Dataset(X_train, y_train, batch_size=64, shuffle=True)
+#train_dset = datagen.flow(X_train, y_train, batch_size=64)
 val_dset = Dataset(X_val, y_val, batch_size=64, shuffle=False)
 test_dset = Dataset(X_test, y_test, batch_size=64)
 
@@ -179,13 +193,17 @@ def train_part34(model_init_fn, optimizer_init_fn, num_epochs=1):
         t = 0
         for epoch in range(num_epochs):
             print('Starting epoch %d' % epoch)
-            for x_np, y_np in train_dset:
+            batch = 0
+            for x_np, y_np in datagen.flow(X_train, y_train, batch_size=64):
                 feed_dict = {x: x_np, y: y_np, is_training: 1}
+                batch += 1
                 loss_np, _ = sess.run([loss, train_op], feed_dict=feed_dict)
                 if t % print_every == 0:
                     print('Iteration %d, loss = %.4f' % (t, loss_np))
                     check_accuracy(sess, val_dset, x, scores, is_training=is_training)
                     print()
+                if batch >= len(X_train)/64:
+                    break
                 t += 1
 
 
@@ -250,13 +268,17 @@ def test_part34(model_init_fn, optimizer_init_fn, num_epochs=1):
         t = 0
         for epoch in range(num_epochs):
             print('Starting epoch %d' % epoch)
-            for x_np, y_np in train_dset:
-                feed_dict = {x: x_np, y: y_np, is_training: 0}
+            batches = 0
+            for x_np, y_np in datagen.flow(X_train, y_train, batch_size=64):
+                feed_dict = {x: x_np, y: y_np, is_training: 1}
                 loss_np, _ = sess.run([loss, train_op], feed_dict=feed_dict)
+                batches += 1
                 if t % print_every == 0:
                     print('Iteration %d, loss = %.4f' % (t, loss_np))
-                    check_accuracy(sess, test_dset, x, scores, is_training=0)
+                    check_accuracy(sess, val_dset, x, scores, is_training=is_training)
                     print()
+                if batches >= len(X_train) / 64 :
+                    break
                 t += 1
         num_correct, num_samples = 0, 0
         for x_batch, y_batch in test_dset:
@@ -266,7 +288,7 @@ def test_part34(model_init_fn, optimizer_init_fn, num_epochs=1):
             num_samples += x_batch.shape[0]
             num_correct += (y_pred == y_batch).sum()
         acc = float(num_correct) / num_samples
-        print('Got %d / %d correct (%.2f%%)' % (num_correct, num_samples, 100 * acc))
+        print(' !!!TEST : Got %d / %d correct (%.2f%%)' % (num_correct, num_samples, 100 * acc))
 
 def model_init_fn(inputs, is_training):
     model = None
@@ -313,11 +335,11 @@ def model_init_fn(inputs, is_training):
 
     pool2_flat = tf.reshape(ba4, [-1, 4*4*512])
     dense1 = tf.layers.dense(pool2_flat, units = 1024, activation = tf.nn.relu)
-    #ba5 = tf.layers.batch_normalization(dense1, center = False, scale = False, training = is_training)
-    dropout1 = tf.layers.dropout(dense1, rate = 0.25, training = is_training)
-    dense2 = tf.layers.dense(dropout1, units = 1024, activation = tf.nn.relu)
-    #ba6 = tf.layers.batch_normalization(dense2, center = False, scale = False, training = is_training)
-    dropout2 = tf.layers.dropout(dense2, training = is_training)
+    ba5 = tf.layers.batch_normalization(dense1, center = False, scale = False, training = is_training)
+    dropout1 = tf.layers.dropout(ba5, training = is_training)
+    dense2 = tf.layers.dense(dropout1, units = 512, activation = tf.nn.relu)
+    ba6 = tf.layers.batch_normalization(dense2, center = False, scale = False, training = is_training)
+    dropout2 = tf.layers.dropout(ba6, training = is_training)
 
     net = tf.layers.dense(dropout2, units = 10)
     ############################################################################
@@ -350,5 +372,8 @@ def resnet_init_fn(inputs, is_training):
 #device = '/cpu:0'
 print_every = 300
 num_epochs = 100
-train_part34(model_init_fn, optimizer_init_fn, num_epochs)
+
+#test_part34(model_init_fn, optimizer_init_fn, num_epochs)
 #train_part34(resnet_init_fn,optimizer_init_fn, num_epochs)
+
+test_part34(ResNet50.ResNet50, optimizer_init_fn, num_epochs)
